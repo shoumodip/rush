@@ -1,87 +1,105 @@
 package main
 
-import rl "vendor:raylib"
-
-BACKGROUND_COLOR :: rl.Color{0x18, 0x18, 0x18, 0xFF}
-BUILDING_COLOR :: rl.Color{0xBB, 0x66, 0x66, 0xFF}
-
-PLAYER_SIZE :: 30.0
-PLAYER_SPEED :: 300.0
-PLAYER_COLOR :: rl.Color{0xDD, 0xDD, 0xDD, 0xFF}
+import "vendor:raylib"
 
 CAMERA_SPEED :: 2.0
+PLAYER_SPEED :: 200.0
 
 CROSSHAIR_SIZE :: 25.0
-CROSSHAIR_THICC :: 2.5
-CROSSHAIR_COLOR :: PLAYER_COLOR
+CROSSHAIR_COLOR :: raylib.Color{0xDD, 0xDD, 0xDD, 0xFF}
+
+BACKGROUND_COLOR :: raylib.Color{0x18, 0x18, 0x18, 0xFF}
+
+Sprite :: struct {
+	atlas:    ^raylib.Texture,
+	boundary: raylib.Rectangle,
+	position: raylib.Vector2,
+}
 
 main :: proc() {
-	rl.SetConfigFlags(rl.ConfigFlags{rl.ConfigFlag.MSAA_4X_HINT, rl.ConfigFlag.FULLSCREEN_MODE})
+	raylib.SetConfigFlags(raylib.ConfigFlags{raylib.ConfigFlag.FULLSCREEN_MODE})
 
-	rl.InitWindow(0, 0, "Rush")
-	defer rl.CloseWindow()
+	raylib.InitWindow(0, 0, "Rush")
+	defer raylib.CloseWindow()
 
-	rl.HideCursor()
-	defer rl.ShowCursor()
+	raylib.SetTargetFPS(60)
 
-	rl.SetTargetFPS(60)
+	raylib.InitAudioDevice()
+	defer raylib.CloseAudioDevice()
 
-	player: rl.Vector2
-	buildings: [100]rl.Rectangle
+	raylib.HideCursor()
+	defer raylib.ShowCursor()
 
-	for _, i in buildings {
-		buildings[i] = rl.Rectangle {
-			x      = cast(f32)rl.GetRandomValue(-5000, 5000),
-			y      = cast(f32)rl.GetRandomValue(-5000, 5000),
-			width  = cast(f32)rl.GetRandomValue(50, 200),
-			height = cast(f32)rl.GetRandomValue(50, 200),
-		}
+	atlas := raylib.LoadTexture("assets/atlas.png")
+	defer raylib.UnloadTexture(atlas)
+
+	player := Sprite {
+		atlas    = &atlas,
+		boundary = {0.0, 0.0, 49.0, 43.0},
 	}
-	buildings[0].x = 200
-	buildings[0].y = 0
 
-	camera := rl.Camera2D {
+	camera := raylib.Camera2D {
 		zoom = 1.0,
 	}
 
-	for !rl.WindowShouldClose() {
-		dt := rl.GetFrameTime()
+	for !raylib.WindowShouldClose() {
+		dt := raylib.GetFrameTime()
+		mouse := raylib.GetMousePosition()
 
-		delta: rl.Vector2
-		if rl.IsKeyDown(rl.KeyboardKey.W) || rl.IsKeyDown(rl.KeyboardKey.UP) do delta.y = -1
-		if rl.IsKeyDown(rl.KeyboardKey.A) || rl.IsKeyDown(rl.KeyboardKey.LEFT) do delta.x = -1
-		if rl.IsKeyDown(rl.KeyboardKey.S) || rl.IsKeyDown(rl.KeyboardKey.DOWN) do delta.y = 1
-		if rl.IsKeyDown(rl.KeyboardKey.D) || rl.IsKeyDown(rl.KeyboardKey.RIGHT) do delta.x = 1
-		player += rl.Vector2Normalize(delta) * PLAYER_SPEED * dt
+		delta: raylib.Vector2
+		if raylib.IsKeyDown(raylib.KeyboardKey.W) do delta.y = -1.0
+		if raylib.IsKeyDown(raylib.KeyboardKey.A) do delta.x = -1.0
+		if raylib.IsKeyDown(raylib.KeyboardKey.S) do delta.y = 1.0
+		if raylib.IsKeyDown(raylib.KeyboardKey.D) do delta.x = 1.0
+		player.position += raylib.Vector2Normalize(delta) * PLAYER_SPEED * dt
 
-		camera.target += (player - camera.target) * CAMERA_SPEED * dt
-		camera.offset = {cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight()} / 2
+		camera.target += (player.position - camera.target) * CAMERA_SPEED * dt
+		camera.offset = {cast(f32)raylib.GetScreenWidth(), cast(f32)raylib.GetScreenHeight()} / 2.0
 
-		rl.BeginDrawing()
-		rl.ClearBackground(BACKGROUND_COLOR)
+		raylib.BeginDrawing()
+		{
+			raylib.ClearBackground(BACKGROUND_COLOR)
 
-		rl.BeginMode2D(camera)
-		for b in buildings {
-			rl.DrawRectangleRec(b, BUILDING_COLOR)
+			raylib.BeginMode2D(camera)
+			{
+				final := raylib.Rectangle {
+					player.position.x,
+					player.position.y,
+					player.boundary.width,
+					player.boundary.height,
+				}
+
+				angle := -raylib.Vector2LineAngle(
+					raylib.GetWorldToScreen2D(player.position, camera),
+					mouse,
+				)
+
+				raylib.DrawTexturePro(
+					player.atlas^,
+					player.boundary,
+					final,
+					{final.width, final.height} / 2.0,
+					angle * raylib.RAD2DEG,
+					raylib.WHITE,
+				)
+			}
+			raylib.EndMode2D()
+
+			raylib.DrawLineEx(
+				mouse - {0.0, CROSSHAIR_SIZE / 2.0},
+				mouse + {0.0, CROSSHAIR_SIZE / 2.0},
+				CROSSHAIR_SIZE / 10.0,
+				CROSSHAIR_COLOR,
+			)
+
+			raylib.DrawLineEx(
+				mouse - {CROSSHAIR_SIZE / 2.0, 0.0},
+				mouse + {CROSSHAIR_SIZE / 2.0, 0.0},
+				CROSSHAIR_SIZE / 10.0,
+				CROSSHAIR_COLOR,
+			)
+
 		}
-
-		rl.DrawCircleV(player, PLAYER_SIZE, PLAYER_COLOR)
-		rl.EndMode2D()
-
-		mouse := rl.GetMousePosition()
-		rl.DrawLineEx(
-			mouse - {0, CROSSHAIR_SIZE / 2},
-			mouse + {0, CROSSHAIR_SIZE / 2},
-			CROSSHAIR_THICC,
-			CROSSHAIR_COLOR,
-		)
-		rl.DrawLineEx(
-			mouse - {CROSSHAIR_SIZE / 2, 0},
-			mouse + {CROSSHAIR_SIZE / 2, 0},
-			CROSSHAIR_THICC,
-			CROSSHAIR_COLOR,
-		)
-
-		rl.EndDrawing()
+		raylib.EndDrawing()
 	}
 }
