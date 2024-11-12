@@ -4,6 +4,7 @@ import "vendor:raylib"
 
 CAMERA_SPEED :: 2.0
 PLAYER_SPEED :: 200.0
+ZOMBIE_SPEED :: 100.0
 
 CROSSHAIR_SIZE :: 25.0
 CROSSHAIR_COLOR :: raylib.Color{0xDD, 0xDD, 0xDD, 0xFF}
@@ -14,6 +15,24 @@ Sprite :: struct {
 	atlas:    ^raylib.Texture,
 	boundary: raylib.Rectangle,
 	position: raylib.Vector2,
+}
+
+sprite_draw :: proc(sprite: Sprite, angle: f32) {
+	final := raylib.Rectangle {
+		sprite.position.x,
+		sprite.position.y,
+		sprite.boundary.width,
+		sprite.boundary.height,
+	}
+
+	raylib.DrawTexturePro(
+		sprite.atlas^,
+		sprite.boundary,
+		final,
+		{final.width, final.height} / 2.0,
+		angle * raylib.RAD2DEG,
+		raylib.WHITE,
+	)
 }
 
 main :: proc() {
@@ -38,6 +57,12 @@ main :: proc() {
 		boundary = {0.0, 0.0, 49.0, 43.0},
 	}
 
+	zombie := Sprite {
+		atlas    = &atlas,
+		boundary = {50.0, 1.0, 35.0, 43.0},
+		position = {200.0, 200.0},
+	}
+
 	camera := raylib.Camera2D {
 		zoom = 1.0,
 	}
@@ -53,6 +78,9 @@ main :: proc() {
 		if raylib.IsKeyDown(raylib.KeyboardKey.D) do delta.x = 1.0
 		player.position += raylib.Vector2Normalize(delta) * PLAYER_SPEED * dt
 
+		zombie.position +=
+			raylib.Vector2Normalize(player.position - zombie.position) * ZOMBIE_SPEED * dt
+
 		camera.target += (player.position - camera.target) * CAMERA_SPEED * dt
 		camera.offset = {cast(f32)raylib.GetScreenWidth(), cast(f32)raylib.GetScreenHeight()} / 2.0
 
@@ -62,26 +90,15 @@ main :: proc() {
 
 			raylib.BeginMode2D(camera)
 			{
-				final := raylib.Rectangle {
-					player.position.x,
-					player.position.y,
-					player.boundary.width,
-					player.boundary.height,
-				}
-
-				angle := -raylib.Vector2LineAngle(
-					raylib.GetWorldToScreen2D(player.position, camera),
-					mouse,
+				sprite_draw(
+					player,
+					-raylib.Vector2LineAngle(
+						player.position,
+						raylib.GetScreenToWorld2D(mouse, camera),
+					),
 				)
 
-				raylib.DrawTexturePro(
-					player.atlas^,
-					player.boundary,
-					final,
-					{final.width, final.height} / 2.0,
-					angle * raylib.RAD2DEG,
-					raylib.WHITE,
-				)
+				sprite_draw(zombie, -raylib.Vector2LineAngle(zombie.position, player.position))
 			}
 			raylib.EndMode2D()
 
